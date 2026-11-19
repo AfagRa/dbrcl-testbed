@@ -1,0 +1,19 @@
+stages: [test]
+
+go:
+  stage: test
+  image: golang:1.23
+  script:
+    - |
+      for m in services/*/go.mod; do
+        [ -f "$m" ] || continue
+        d=$(dirname "$m"); echo "== $d"
+        (cd "$d" && go vet ./... && go test ./...)
+      done
+
+pytest:
+  stage: test
+  image: python:3.11-slim
+  script:
+    - pip install -q -r controller/requirements.txt
+    - python -m pytest -q controller/tests experiments

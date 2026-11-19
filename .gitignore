@@ -1,0 +1,24 @@
+# secrets
+.env
+*.secret
+# run data (keep the directory)
+runs/*
+!runs/.gitkeep
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+# go
+bin/
+*.exe
+*.test
+# models from calibration runs
+controller/models/
+# editors / os
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

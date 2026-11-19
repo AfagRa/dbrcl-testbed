@@ -1,0 +1,125 @@
+# dbrcl-testbed: single source of truth for every tunable parameter.
+# Paper-level parameters are marked [PAPER]; their defaults are PLACEHOLDERS
+# chosen for a time-compressed laptop testbed, not justified values.
+# All durations are in seconds unless the key name says otherwise.
+
+experiment:
+  horizon_seconds: 1800          # [PAPER] T_H, observation horizon per run
+  warmup_seconds: 120            # stable-only baseline period before rollout starts
+  trials: 5                      # trials per (strategy, fault) cell
+  base_seed: 42
+  strategies: [manual, static, dbrcl]
+  faults: [mem_leak, cpu_saturation, latency_regression, dependency_failure, error_burst, unexpected_egress]
+  fault_stage_weight: 0.05       # inject when the router reaches this weight
+  fault_delay_seconds: 30        # ...and this long after reaching it
+  healthy_loads: [steady, spike] # healthy runs used for false-positive rate
+
+cluster:
+  cpus: 4
+  memory_mb: 8192
+  cni: calico
+  driver: docker
+  namespace: dbrcl
+  sink_namespace: sink
+
+stages:
+  weights: [0.01, 0.05, 0.25, 1.0]       # [PAPER] w_k
+  min_dwell_seconds: [180, 180, 180, 180] # [PAPER] dwell per stage (time-compressed)
+
+controller:
+  step_seconds: 10
+  window_seconds: 60             # sliding telemetry window
+  post_check_seconds: 60         # post-rollback health check length (t_r)
+  max_rollout_seconds: null      # [PAPER] T_max, placeholder, meaning to confirm (see README)
+  prometheus_url: http://prometheus-server.monitoring.svc.cluster.local
+  router_url: http://router.dbrcl.svc.cluster.local:8080
+  stale_sample_seconds: 30       # older samples count as a telemetry gap
+
+slo:
+  latency_ms: 300
+  error_rate: 0.01
+
+static:                          # Argo/Flagger-style fixed thresholds, canary absolute
+  failure_limit: 3
+  error_rate: 0.01
+  p99_ms: 500
+  memory_fraction: 0.85
+  cpu_fraction: 0.90
+
+manual:                          # simulated reviewer, a MODELING ASSUMPTION
+  review_interval_seconds: 300   # [PAPER] reviewer interval
+  action_delay_seconds: 180      # decision + execution time after flagging
+  error_ratio_vs_stable: 2.0
+  error_rate_min: 0.02
+  p99_ratio_vs_stable: 2.0
+  memory_fraction: 0.95
+  flag_on_sink_connections: true
+
+forecast:
+  trend: add
+  seasonal: add                  # add | none
+  seasonal_period_seconds: 600
+  history_seconds: 1200          # stable history used for the fit
+  score_threshold_sigma: 3.0
+
+exhaustion:
+  samples: 30                    # Theil-Sen window (samples at step_seconds)
+  tte_horizon_seconds: 600
+  include_cpu: true
+
+iforest:
+  quantile: 0.995
+  n_estimators: 100
+  rolling_window_samples: 360
+  model_path: controller/models/iforest.joblib  # optional, from `make calibrate`
+
+fusion:
+  alpha: 0.3                     # EWMA smoothing
+  throttle_fraction: 0.7
+  kappa: 0.02                    # [PAPER] theta_rb_k = min(theta_max, kappa / w_k)
+  theta_max: 0.8                 # [PAPER]
+  epsilon: null                  # [PAPER] placeholder, meaning to confirm (see README)
+  weights:
+    forecast: 1.0
+    exhaustion: 1.0
+    iforest: 1.0
+
+security:
+  source: tetragon               # tetragon | sink_fallback (decided in Phase 7)
+  egress_allowlist:
+    - payment.dbrcl.svc.cluster.local:8080
+    - kube-dns.kube-system.svc.cluster.local:53
+    - prometheus-server.monitoring.svc.cluster.local:80
+  exec_allowlist:
+    - /app/checkout
+
+load:
+  uid_pool: 10000
+  duration_seconds: 1800
+  steady:
+    rps: 20
+  diurnal:
+    min_rps: 10
+    max_rps: 40
+    period_seconds: 600
+  spike:
+    base_rps: 20
+    factor: 4
+    duration_seconds: 180
+    offset_seconds: 600
+
+services:
+  payment:
+    latency_ms: 20
+    jitter_ms: 5
+  checkout:
+    memory_limit: 256Mi
+    cpu_limit: 500m
+
+faults:                          # default params per fault
+  mem_leak:           {target_fraction: 0.9, tau_seconds: 300}
+  cpu_saturation:     {workers: 2, duty: 0.9}
+  latency_regression: {median_ms: 250, sigma: 0.5}
+  dependency_failure: {p: 0.3, mode: error}
+  error_burst:        {p: 0.3}
+  unexpected_egress:  {p: 0.2, extra_ports: []}
