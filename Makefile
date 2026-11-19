@@ -16,10 +16,10 @@ IMAGE_TAG  ?= $(shell bash scripts/image-tag.sh)
 PROM_CHART_VERSION ?= 29.47.2
 export IMAGE_TAG PROM_CHART_VERSION
 
-.PHONY: help preflight cluster-up build deploy undeploy cluster-check test load-steady load-spike run analyze
+.PHONY: help preflight cluster-up build deploy undeploy cluster-check test load-steady load-spike calibrate run analyze
 
 help:
-	@echo "targets: preflight cluster-up build deploy undeploy cluster-check test load-steady load-spike run analyze"
+	@echo "targets: preflight cluster-up build deploy undeploy cluster-check test load-steady load-spike calibrate run analyze"
 
 preflight:
 	@bash scripts/preflight.sh
@@ -48,6 +48,9 @@ load-steady:
 
 load-spike:
 	@echo "load-spike: implemented in Phase 4"
+
+calibrate:
+	@echo "calibrate: implemented with the DBRCL engine and runner (Phases 6 and 8)"
 
 run:
 	@echo "run: implemented in Phase 8"

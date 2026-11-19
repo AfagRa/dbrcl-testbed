@@ -7,6 +7,13 @@ MEM=${MINIKUBE_MEMORY:-8192}
 CNI=${MINIKUBE_CNI:-calico}
 DRIVER=${MINIKUBE_DRIVER:-docker}
 K8S=${MINIKUBE_K8S_VERSION:-v1.37.0}
+# shellcheck source=lib.sh
+. "$(dirname "$0")/lib.sh"
+
+wmem=$(wsl_mem_mb)
+if [ "${wmem:-0}" -lt "$WSL_SMALL_MB" ]; then
+  echo "WARNING: WSL2 has ${wmem} MB (< 10 GB). Recommended: MINIKUBE_CPUS=$SMALL_CPUS MINIKUBE_MEMORY=$SMALL_MEMORY make cluster-up" >&2
+fi
 
 # minikube silently keeps CPU/memory/CNI of an existing profile. Refuse a mismatch.
 cfg="${MINIKUBE_HOME:-$HOME/.minikube}/profiles/$PROFILE/config.json"

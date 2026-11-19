@@ -4,17 +4,39 @@
 # All durations are in seconds unless the key name says otherwise.
 
 experiment:
-  horizon_seconds: 1800          # [PAPER] T_H, observation horizon per run
-  warmup_seconds: 120            # stable-only baseline period before rollout starts
-  trials: 5                      # trials per (strategy, fault) cell
-  base_seed: 42
+  horizon_seconds: 1200          # [PAPER] T_H, observation horizon per run
+  warmup_seconds: 90             # stable-only baseline period before rollout starts (load is running)
+  trials: 3                      # trials per main-matrix cell
+  base_seed: 42                  # evaluation seed of trial t is base_seed + t
   strategies: [manual, static, dbrcl]
-  faults: [mem_leak, cpu_saturation, latency_regression, dependency_failure, error_burst, unexpected_egress]
   fault_stage_weight: 0.05       # inject when the router reaches this weight
   fault_delay_seconds: 30        # ...and this long after reaching it
-  healthy_loads: [steady, spike] # healthy runs used for false-positive rate
 
-cluster:
+# A scenario is a (fault, load) pair; fault "none" is a healthy release.
+scenarios:
+  mem_leak:           {fault: mem_leak,           load: steady, class: operational}
+  latency_regression: {fault: latency_regression, load: steady, class: operational}
+  error_burst:        {fault: error_burst,        load: steady, class: operational}
+  unexpected_egress:  {fault: unexpected_egress,  load: steady, class: security}
+  cpu_saturation:     {fault: cpu_saturation,     load: steady, class: operational}
+  dependency_failure: {fault: dependency_failure, load: steady, class: operational}
+  healthy_steady:     {fault: none,               load: steady, class: none}
+  healthy_spike:      {fault: none,               load: spike,  class: none}
+
+matrix:
+  main:                          # strategies x scenarios x experiment.trials
+    scenarios: [mem_leak, latency_regression, error_burst, unexpected_egress, healthy_spike]
+  demo:                          # strategies x scenarios x 1
+    scenarios: [cpu_saturation, dependency_failure]
+    trials: 1
+
+calibration:                     # make calibrate: healthy releases only
+  seeds: [9001, 9002, 9003]      # must be disjoint from evaluation seeds
+  scenarios: [healthy_steady, healthy_spike]
+  kappa_margin: 1.2              # kappa = margin * max_k(w_k * r_k)
+  output: config/calibrated.yaml # read by evaluation runs if present
+
+cluster:                         # make cluster-up reads MINIKUBE_CPUS / MINIKUBE_MEMORY (defaults below)
   cpus: 4
   memory_mb: 8192
   cni: calico
@@ -24,13 +46,13 @@ cluster:
 
 stages:
   weights: [0.01, 0.05, 0.25, 1.0]       # [PAPER] w_k
-  min_dwell_seconds: [180, 180, 180, 180] # [PAPER] dwell per stage (time-compressed)
+  min_dwell_seconds: [120, 120, 120, 120] # [PAPER] dwell per stage (time-compressed)
 
 controller:
   step_seconds: 10
   window_seconds: 60             # sliding telemetry window
   post_check_seconds: 60         # post-rollback health check length (t_r)
-  max_rollout_seconds: null      # [PAPER] T_max, placeholder, meaning to confirm (see README)
+  max_rollout_seconds: 480       # [PAPER] T_max (= sum of stage dwells at the defaults)
   prometheus_url: http://prometheus-server.monitoring.svc.cluster.local
   router_url: http://router.dbrcl.svc.cluster.local:8080
   stale_sample_seconds: 30       # older samples count as a telemetry gap
@@ -76,16 +98,18 @@ iforest:
 fusion:
   alpha: 0.3                     # EWMA smoothing
   throttle_fraction: 0.7
-  kappa: 0.02                    # [PAPER] theta_rb_k = min(theta_max, kappa / w_k)
+  kappa: 0.05                    # [PAPER] starting value; theta_rb_k = min(theta_max, kappa / w_k).
+                                 #   Replaced by config/calibrated.yaml (make calibrate) when present.
   theta_max: 0.8                 # [PAPER]
-  epsilon: null                  # [PAPER] placeholder, meaning to confirm (see README)
+  epsilon: 0.05                  # [PAPER]
   weights:
     forecast: 1.0
     exhaustion: 1.0
     iforest: 1.0
 
 security:
-  source: tetragon               # tetragon | sink_fallback (decided in Phase 7)
+  source: auto                   # auto = tetragon if BTF is present in the minikube node,
+                                 #   else sink_fallback (no prompt); or force tetragon | sink_fallback
   egress_allowlist:
     - payment.dbrcl.svc.cluster.local:8080
     - kube-dns.kube-system.svc.cluster.local:53
@@ -95,18 +119,18 @@ security:
 
 load:
   uid_pool: 10000
-  duration_seconds: 1800
+  duration_seconds: 1200         # = experiment.horizon_seconds
   steady:
-    rps: 20
+    rps: 50
   diurnal:
-    min_rps: 10
-    max_rps: 40
+    min_rps: 25
+    max_rps: 75
     period_seconds: 600
   spike:
-    base_rps: 20
+    base_rps: 50
     factor: 4
     duration_seconds: 180
-    offset_seconds: 600
+    offset_seconds: 300          # from load start; lands in stages 2-3 of a healthy rollout
 
 services:
   payment:
@@ -123,3 +147,8 @@ faults:                          # default params per fault
   dependency_failure: {p: 0.3, mode: error}
   error_burst:        {p: 0.3}
   unexpected_egress:  {p: 0.2, extra_ports: []}
+
+analysis:
+  stats: [mean, std, min, max]   # n=3 per cell: no confidence intervals
+  figure_width_in: 3.5           # IEEE single column
+  figure_formats: [pdf, png]

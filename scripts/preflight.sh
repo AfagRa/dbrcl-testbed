@@ -13,6 +13,8 @@ want_cpus=${MINIKUBE_CPUS:-4}
 want_mem=${MINIKUBE_MEMORY:-8192}
 PROFILE=${MINIKUBE_PROFILE:-dbrcl}
 mk() { minikube -p "$PROFILE" "$@"; }
+# shellcheck source=lib.sh
+. "$(dirname "$0")/lib.sh"
 
 echo "dbrcl-testbed preflight ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
 echo
@@ -32,6 +34,19 @@ if [ -r /proc/meminfo ]; then mem_mb=$(awk '/MemTotal/ {print int($2/1024)}' /pr
 elif have sysctl; then mem_mb=$(( $(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1048576 )); fi
 if [ "$mem_mb" -ge $((want_mem + 4096)) ]; then pass "Total RAM" "${mem_mb} MB"
 else warn "Total RAM" "${mem_mb} MB (minikube wants ${want_mem} MB plus headroom)"; fi
+
+echo
+echo "WSL2"
+if in_wsl; then pass "environment" "inside WSL2 distro ${WSL_DISTRO_NAME:-?} (supported setup)"
+else warn "environment" "not inside a WSL2 distro ($(uname -s)); scripts also run here, but the supported setup is WSL2 Ubuntu"; fi
+wv=$(wsl_version)
+if [ -n "$wv" ]; then pass "WSL version" "$wv"; else warn "WSL version" "wsl.exe not reachable"; fi
+wmem=$(wsl_mem_mb); wcpu=$(wsl_cpus)
+src="/proc"; in_wsl || src="Docker Desktop WSL2 VM"
+if [ "${wmem:-0}" -ge "$WSL_SMALL_MB" ]; then pass "WSL memory" "${wmem} MB ($src)"
+else warn "WSL memory" "${wmem} MB ($src) < 10 GB: use MINIKUBE_CPUS=$SMALL_CPUS MINIKUBE_MEMORY=$SMALL_MEMORY"; fi
+if [ "${wcpu:-0}" -ge "$want_cpus" ]; then pass "WSL CPUs" "$wcpu ($src)"
+else warn "WSL CPUs" "$wcpu ($src) < MINIKUBE_CPUS=$want_cpus"; fi
 
 echo
 echo "Tools"
@@ -85,9 +100,9 @@ if have minikube; then
     # minikube ssh does not propagate exit codes reliably on Windows: compare output.
     btf=$(mk ssh -- 'test -r /sys/kernel/btf/vmlinux && echo BTF_YES || echo BTF_NO' 2>/dev/null | first_line)
     if [ "$btf" = "BTF_YES" ]; then
-      pass "BTF (Tetragon)" "/sys/kernel/btf/vmlinux present, kernel $kver"
+      pass "BTF (Tetragon)" "/sys/kernel/btf/vmlinux present in the minikube node, kernel $kver -> Tetragon"
     else
-      warn "BTF (Tetragon)" "/sys/kernel/btf/vmlinux missing, kernel $kver -> Phase 7 uses sink_fallback"
+      warn "BTF (Tetragon)" "/sys/kernel/btf/vmlinux missing in the minikube node, kernel $kver -> sink_fallback"
     fi
   else
     warn "minikube status" "${host_state:-not running} (run make cluster-up, then re-run preflight for BTF)"
