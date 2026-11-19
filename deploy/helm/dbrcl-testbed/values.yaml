@@ -1,0 +1,40 @@
+# Install into namespace dbrcl (see `make deploy`):
+#   helm upgrade --install dbrcl-testbed deploy/helm/dbrcl-testbed -n dbrcl --create-namespace --set image.tag=<tag>
+image:
+  registry: dbrcl          # images are built into minikube, never pulled
+  tag: dev
+  pullPolicy: Never
+
+ddEnv: testbed             # tags.datadoghq.com/env (unified service tagging)
+sinkNamespace: sink
+
+slo:
+  latencyMs: 300           # keep equal to slo.latency_ms in config/experiment.yaml
+
+payment:
+  latencyMs: 20
+  jitterMs: 5
+  resources:
+    requests: {cpu: 50m, memory: 32Mi}
+    limits: {cpu: 250m, memory: 64Mi}
+
+checkout:
+  paymentTimeoutMs: 1000
+  replicas: 1              # per track
+  resources:
+    requests: {cpu: 100m, memory: 64Mi}
+    limits: {cpu: 500m, memory: 256Mi}   # leaks and saturation must be visible against this
+
+router:
+  nodePort: 30080
+  initialWeight: 0
+  resources:
+    requests: {cpu: 100m, memory: 32Mi}
+    limits: {cpu: "1", memory: 128Mi}
+
+sink:
+  ports: [9000, 9001, 9002, 9003]  # 9000 is the default target; the rest serve unexpected_egress extra_ports
+  metricsPort: 9100
+  resources:
+    requests: {cpu: 20m, memory: 16Mi}
+    limits: {cpu: 200m, memory: 64Mi}

@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: router
+  labels: {app: router}
+spec:
+  replicas: 1   # the weight lives in this process: exactly one router
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: router}
+  template:
+    metadata:
+      labels:
+        {{- include "dbrcl.podLabels" (dict "root" . "app" "router" "service" "router" "version" .Values.image.tag) | nindent 8 }}
+      annotations:
+        {{- include "dbrcl.scrape" 8080 | nindent 8 }}
+    spec:
+      containers:
+        - name: router
+          image: {{ include "dbrcl.image" (dict "root" . "name" "router") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - {name: http, containerPort: 8080}
+          env:
+            - {name: STABLE_URL, value: "http://checkout-stable.{{ .Release.Namespace }}.svc.cluster.local:8080"}
+            - {name: CANARY_URL, value: "http://checkout-canary.{{ .Release.Namespace }}.svc.cluster.local:8080"}
+            - {name: SLO_LATENCY_MS, value: {{ .Values.slo.latencyMs | quote }}}
+            - {name: INITIAL_WEIGHT, value: {{ .Values.router.initialWeight | quote }}}
+          readinessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 10}
+          resources:
+            {{- toYaml .Values.router.resources | nindent 12 }}
+          {{- include "dbrcl.securityContext" . | nindent 10 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: router
+  labels: {app: router}
+spec:
+  type: NodePort
+  selector: {app: router}
+  ports:
+    - {name: http, port: 8080, targetPort: http, nodePort: {{ .Values.router.nodePort }}}

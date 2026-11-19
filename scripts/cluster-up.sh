@@ -21,8 +21,22 @@ if [ -f "$cfg" ]; then
   fi
 fi
 
-echo "minikube start -p $PROFILE --driver=$DRIVER --cpus=$CPUS --memory=$MEM --cni=$CNI --kubernetes-version=$K8S"
-minikube start -p "$PROFILE" --driver="$DRIVER" --cpus="$CPUS" --memory="$MEM" --cni="$CNI" --kubernetes-version="$K8S"
+# Per-request router logs are raw experiment data. The kubelet default (10Mi
+# per container log file) would rotate within one 30-minute run and drop lines
+# from `kubectl logs`, so raise it well above one run's volume.
+LOGMAX=${KUBELET_LOG_MAX_SIZE:-500Mi}
+EXTRA=(--extra-config=kubelet.container-log-max-size="$LOGMAX" --extra-config=kubelet.container-log-max-files=2)
+
+echo "minikube start -p $PROFILE --driver=$DRIVER --cpus=$CPUS --memory=$MEM --cni=$CNI --kubernetes-version=$K8S ${EXTRA[*]}"
+minikube start -p "$PROFILE" --driver="$DRIVER" --cpus="$CPUS" --memory="$MEM" --cni="$CNI" --kubernetes-version="$K8S" "${EXTRA[@]}"
+# On an existing profile minikube rewrites the kubelet unit but does not restart
+# kubelet; restart it if the running process lacks the log-size flag.
+if ! minikube -p "$PROFILE" ssh -- "ps -eo args | grep [k]ubelet/ " | grep -q "container-log-max-size=$LOGMAX"; then
+  echo "restarting kubelet to apply container-log-max-size=$LOGMAX"
+  minikube -p "$PROFILE" ssh -- "sudo systemctl daemon-reload && sudo systemctl restart kubelet"
+  sleep 5
+fi
+minikube -p "$PROFILE" ssh -- "ps -eo args | grep [k]ubelet/ " | grep -o "container-log-max-size=[^ ]*"
 minikube -p "$PROFILE" addons enable metrics-server >/dev/null || true
 echo "waiting for node Ready..."
 kubectl wait --for=condition=Ready node --all --timeout=300s

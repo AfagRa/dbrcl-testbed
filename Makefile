@@ -12,11 +12,14 @@ MINIKUBE_PROFILE?= dbrcl
 export MINIKUBE_CPUS MINIKUBE_MEMORY MINIKUBE_CNI MINIKUBE_DRIVER MINIKUBE_PROFILE PYTHON
 
 GO_MODULES := $(dir $(wildcard services/go.mod))
+IMAGE_TAG  ?= $(shell bash scripts/image-tag.sh)
+PROM_CHART_VERSION ?= 29.47.2
+export IMAGE_TAG PROM_CHART_VERSION
 
-.PHONY: help preflight cluster-up build deploy undeploy test load-steady load-spike run analyze
+.PHONY: help preflight cluster-up build deploy undeploy cluster-check test load-steady load-spike run analyze
 
 help:
-	@echo "targets: preflight cluster-up build deploy undeploy test load-steady load-spike run analyze"
+	@echo "targets: preflight cluster-up build deploy undeploy cluster-check test load-steady load-spike run analyze"
 
 preflight:
 	@bash scripts/preflight.sh
@@ -25,13 +28,16 @@ cluster-up:
 	@bash scripts/cluster-up.sh
 
 build:
-	@echo "build: implemented in Phase 1-3 (minikube image build)"
+	@bash scripts/build-images.sh
 
 deploy:
-	@echo "deploy: implemented in Phase 3 (helm install)"
+	@bash scripts/deploy.sh
 
 undeploy:
-	@echo "undeploy: implemented in Phase 3"
+	@bash scripts/undeploy.sh
+
+cluster-check:
+	@bash scripts/cluster-check.sh
 
 test:
 	@for d in $(GO_MODULES); do echo "== go vet/test $$d"; (cd $$d && go vet ./... && go test ./...); done

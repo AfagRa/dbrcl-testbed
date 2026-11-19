@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.sinkNamespace }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: egress-sink
+  namespace: {{ .Values.sinkNamespace }}
+  labels: {app: egress-sink}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: egress-sink}
+  template:
+    metadata:
+      labels:
+        {{- include "dbrcl.podLabels" (dict "root" . "app" "egress-sink" "service" "egress-sink" "version" .Values.image.tag) | nindent 8 }}
+      annotations:
+        {{- include "dbrcl.scrape" .Values.sink.metricsPort | nindent 8 }}
+    spec:
+      containers:
+        - name: egress-sink
+          image: {{ include "dbrcl.image" (dict "root" . "name" "egress-sink") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - {name: SINK_PORTS, value: {{ join "," .Values.sink.ports | quote }}}
+            - {name: METRICS_PORT, value: {{ .Values.sink.metricsPort | quote }}}
+          ports:
+            {{- range .Values.sink.ports }}
+            - {name: tcp-{{ . }}, containerPort: {{ . }}}
+            {{- end }}
+            - {name: metrics, containerPort: {{ .Values.sink.metricsPort }}}
+          readinessProbe: {httpGet: {path: /healthz, port: metrics}, periodSeconds: 5}
+          resources:
+            {{- toYaml .Values.sink.resources | nindent 12 }}
+          {{- include "dbrcl.securityContext" . | nindent 10 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: egress-sink
+  namespace: {{ .Values.sinkNamespace }}
+  labels: {app: egress-sink}
+spec:
+  selector: {app: egress-sink}
+  ports:
+    {{- range .Values.sink.ports }}
+    - {name: tcp-{{ . }}, port: {{ . }}, targetPort: {{ . }}}
+    {{- end }}

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: dbrcl-testbed
+description: Services for the DBRCL staged-rollout testbed (payment, checkout stable/canary, router, egress-sink).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

@@ -13,7 +13,8 @@ _TODO (Phase 9)._
 ```
 make preflight     # host and tool check, PASS/WARN per item
 make cluster-up    # minikube, 4 CPU / 8 GiB / Calico (override with MINIKUBE_CPUS, MINIKUBE_MEMORY, MINIKUBE_CNI, MINIKUBE_DRIVER)
-make build deploy  # Phase 3
+make build deploy  # images into minikube (tag = git commit), Prometheus + testbed chart
+make cluster-check # checkout via router, every query in docs/promql.md returns data
 make run           # Phase 8
 make analyze       # Phase 8
 ```

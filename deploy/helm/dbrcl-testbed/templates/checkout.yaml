@@ -1,0 +1,48 @@
+{{- range $track := list "stable" "canary" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkout-{{ $track }}
+  labels: {app: checkout, track: {{ $track }}}
+spec:
+  replicas: {{ $.Values.checkout.replicas }}
+  selector:
+    matchLabels: {app: checkout, track: {{ $track }}}
+  template:
+    metadata:
+      labels:
+        {{- include "dbrcl.podLabels" (dict "root" $ "app" "checkout" "service" "checkout" "version" $track "track" $track) | nindent 8 }}
+      annotations:
+        {{- include "dbrcl.scrape" 8080 | nindent 8 }}
+    spec:
+      containers:
+        - name: checkout
+          image: {{ include "dbrcl.image" (dict "root" $ "name" "checkout") }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - {name: http, containerPort: 8080}
+          env:
+            - name: POD_NAME
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
+            - {name: VERSION, value: {{ $track }}}
+            - {name: PAYMENT_URL, value: "http://payment.{{ $.Release.Namespace }}.svc.cluster.local:8080"}
+            - {name: PAYMENT_TIMEOUT_MS, value: {{ $.Values.checkout.paymentTimeoutMs | quote }}}
+            - name: MEMORY_LIMIT_BYTES
+              valueFrom: {resourceFieldRef: {containerName: checkout, resource: limits.memory}}
+          readinessProbe: {httpGet: {path: /readyz, port: http}, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 10, timeoutSeconds: 3}
+          resources:
+            {{- toYaml $.Values.checkout.resources | nindent 12 }}
+          {{- include "dbrcl.securityContext" $ | nindent 10 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: checkout-{{ $track }}
+  labels: {app: checkout, track: {{ $track }}}
+spec:
+  selector: {app: checkout, track: {{ $track }}}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+{{- end }}

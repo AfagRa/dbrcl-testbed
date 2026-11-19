@@ -1,0 +1,30 @@
+# prometheus-community/prometheus; chart version is pinned in the Makefile.
+# Small single-node setup: 5s scrape, 2d retention, no persistence.
+# Pods are scraped by the chart-default "kubernetes-pods" job via
+# prometheus.io/* annotations (honor_labels: true keeps our version/pod labels).
+server:
+  global:
+    scrape_interval: 5s
+    scrape_timeout: 4s
+    evaluation_interval: 5s
+  retention: 2d
+  persistentVolume:
+    enabled: false
+  resources:
+    requests: {cpu: 200m, memory: 512Mi}
+    limits: {memory: 1Gi}
+
+alertmanager:
+  enabled: false
+prometheus-pushgateway:
+  enabled: false
+prometheus-node-exporter:
+  enabled: false          # host metrics are not used; kubelet/cAdvisor scraping is kept
+kube-state-metrics:
+  enabled: true           # pod IPs, restarts, OOM-kill reasons
+
+scrapeConfigs:
+  prometheus-pushgateway:
+    enabled: false
+  kubernetes-services:    # blackbox probes, not used
+    enabled: false
