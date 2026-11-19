@@ -2,8 +2,8 @@
 SHELL := bash
 .SHELLFLAGS := -eu -o pipefail -c
 
-# python3 first: Ubuntu has no "python"; inside an activated venv both point to the venv.
-PYTHON         ?= $(shell command -v python3 2>/dev/null || command -v python)
+# The repo venv (.venv) if present, else python3 (Ubuntu has no "python"), else python.
+PYTHON         ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || command -v python3 2>/dev/null || command -v python)
 MINIKUBE_CPUS  ?= 4
 MINIKUBE_MEMORY?= 8192
 MINIKUBE_CNI   ?= calico
@@ -16,10 +16,10 @@ IMAGE_TAG  ?= $(shell bash scripts/image-tag.sh)
 PROM_CHART_VERSION ?= 29.47.2
 export IMAGE_TAG PROM_CHART_VERSION
 
-.PHONY: help preflight cluster-up build deploy undeploy cluster-check test load-steady load-spike calibrate run analyze
+.PHONY: help preflight cluster-up build deploy undeploy cluster-check test load-steady load-diurnal load-spike load-check calibrate run analyze
 
 help:
-	@echo "targets: preflight cluster-up build deploy undeploy cluster-check test load-steady load-spike calibrate run analyze"
+	@echo "targets: preflight cluster-up build deploy undeploy cluster-check test load-steady load-diurnal load-spike load-check calibrate run analyze"
 
 preflight:
 	@bash scripts/preflight.sh
@@ -43,11 +43,11 @@ test:
 	@for d in $(GO_MODULES); do echo "== go vet/test $$d"; (cd $$d && go vet ./... && go test ./...); done
 	@echo "== pytest"; $(PYTHON) -m pytest -q controller/tests experiments
 
-load-steady:
-	@echo "load-steady: implemented in Phase 4"
+load-steady load-diurnal load-spike: load-%:
+	@bash scripts/load.sh $*
 
-load-spike:
-	@echo "load-spike: implemented in Phase 4"
+load-check:
+	@bash scripts/load-check.sh
 
 calibrate:
 	@echo "calibrate: implemented with the DBRCL engine and runner (Phases 6 and 8)"

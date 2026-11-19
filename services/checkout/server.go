@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -51,9 +52,12 @@ func NewServer(cfg Config, l *jlog.Logger) *Server {
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	labels := prometheus.Labels{"version": cfg.Version, "pod": cfg.Pod}
+	// Keep-alive pool sized for the load (default is 2 idle conns per host).
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.MaxIdleConns, tr.MaxIdleConnsPerHost = 512, 256
 	s := &Server{
 		cfg:    cfg,
-		client: &http.Client{Timeout: cfg.PaymentTimeout},
+		client: &http.Client{Timeout: cfg.PaymentTimeout, Transport: tr},
 		reg:    reg,
 		reqs: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "checkout_requests_total", Help: "Checkout requests by status code.", ConstLabels: labels,
@@ -193,6 +197,9 @@ func (s *Server) pay(ctx context.Context, orderID string, amount int64) error {
 	if err != nil {
 		return err
 	}
+	// Drain before closing: the transport only reuses a connection whose body
+	// was read to EOF. Without this every checkout re-dialed (and re-resolved) payment.
+	io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("payment status %d", resp.StatusCode)

@@ -63,6 +63,11 @@ func newProxy(raw string) (*httputil.ReverseProxy, error) {
 		return nil, errors.New("invalid upstream URL " + raw)
 	}
 	p := httputil.NewSingleHostReverseProxy(u)
+	// The default transport keeps only 2 idle connections per host; above a few
+	// concurrent requests every extra request would open a new TCP connection.
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.MaxIdleConns, t.MaxIdleConnsPerHost = 512, 256
+	p.Transport = t
 	p.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, _ error) {
 		w.WriteHeader(http.StatusBadGateway)
 	}

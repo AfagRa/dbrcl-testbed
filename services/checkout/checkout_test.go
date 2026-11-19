@@ -47,6 +47,44 @@ func newFixture(t *testing.T, version string) *fixture {
 	return &fixture{srv: s, ts: ts, logs: logs}
 }
 
+// Payment connections must be reused (regression: an undrained body forced a
+// new TCP connection and DNS lookups per checkout).
+func TestPaymentConnectionReuse(t *testing.T) {
+	var mu sync.Mutex
+	newConns := 0
+	pay := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`{"status":"ok","order_id":"x"}`))
+	}))
+	pay.Config.ConnState = func(_ net.Conn, st http.ConnState) {
+		if st == http.StateNew {
+			mu.Lock()
+			newConns++
+			mu.Unlock()
+		}
+	}
+	pay.Start()
+	defer pay.Close()
+	s := NewServer(Config{Version: "stable", Pod: "p", PaymentURL: pay.URL, PaymentTimeout: time.Second, MemLimit: 64 << 20}, jlog.New(io.Discard))
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+	for i := 0; i < 20; i++ {
+		resp, err := http.Post(ts.URL+"/checkout", "application/json", strings.NewReader(cartBody))
+		if err != nil {
+			t.Fatal(err)
+		}
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != 200 {
+			t.Fatalf("status %d", resp.StatusCode)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if newConns != 1 {
+		t.Fatalf("20 sequential checkouts opened %d payment connections, want 1", newConns)
+	}
+}
+
 func (f *fixture) checkout(t *testing.T) (int, time.Duration) {
 	t.Helper()
 	start := time.Now()

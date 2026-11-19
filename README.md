@@ -19,10 +19,20 @@ make preflight     # host and tool check, PASS/WARN per item
 make cluster-up    # minikube, MINIKUBE_CPUS=4 / MINIKUBE_MEMORY=8192 / Calico; warns to use 2 / 4608 if WSL2 has < 10 GB
 make build deploy  # images into minikube (tag = git commit), Prometheus + testbed chart
 make cluster-check # checkout via router, every query in docs/promql.md returns data
+make load-steady   # also load-diurnal, load-spike: one k6 run with config defaults (T_H long)
+make load-check    # 2-minute steady/diurnal/spike: rate shape, errors, CPU headroom
 make calibrate     # Phases 6/8: kappa from healthy runs -> config/calibrated.yaml
 make run           # Phase 8
 make analyze       # Phase 8
 ```
+
+## Load
+
+[load/k6/load.js](load/k6/load.js) implements three scenarios over a pool of 10,000 users (`user-00000` ...), each request sending `X-User-ID`: `steady` (constant arrival rate), `diurnal` (sinusoid between min and max rps, starting at the minimum) and `spike` (constant base plus a surge to 4x for a fixed window). Parameters come from `load:` in `config/experiment.yaml` and can be overridden by env (`DURATION_S`, `RPS`, `MIN_RPS`, `MAX_RPS`, `PERIOD_S`, `BASE_RPS`, `FACTOR`, `SPIKE_OFFSET_S`, `SPIKE_DURATION_S`, `SEED`); `RUN_DIR` selects where `k6_summary.json` is written.
+
+k6 (`grafana/k6:2.2.0`) runs as a container on minikube's Docker network and targets the router NodePort directly. The minikube node is not reachable from WSL itself, and this avoids a `kubectl port-forward` tunnel in the measurement path while keeping the generator's CPU outside the node's 4-CPU budget. The summary records the exact load start (k6 `setup()` time, UTC).
+
+Measured headroom (single stable pod, 500m CPU limit, weight 0): 200 rps spike → about 50% of the CPU limit, no CFS throttling, router P99 ~30 ms.
 
 ## Running experiments
 
