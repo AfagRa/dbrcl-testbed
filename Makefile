@@ -1,9 +1,9 @@
-# dbrcl-testbed. Recipes are POSIX shell; on Windows run make from Git Bash or
-# with Git's sh.exe on PATH.
+# dbrcl-testbed. Run from WSL2 Ubuntu (supported) or Git Bash on Windows.
 SHELL := bash
 .SHELLFLAGS := -eu -o pipefail -c
 
-PYTHON         ?= python
+# python3 first: Ubuntu has no "python"; inside an activated venv both point to the venv.
+PYTHON         ?= $(shell command -v python3 2>/dev/null || command -v python)
 MINIKUBE_CPUS  ?= 4
 MINIKUBE_MEMORY?= 8192
 MINIKUBE_CNI   ?= calico

@@ -6,7 +6,7 @@ A small, reproducible Kubernetes testbed for the paper *"Minimizing the Blast Ra
 
 ## Platform
 
-Supported setup: Windows with **WSL2 Ubuntu**, Docker Desktop (WSL2 backend, WSL integration enabled for the Ubuntu distro) and `minikube --driver=docker`; run every `make` target from the Ubuntu shell. Setup steps: [docs/wsl-setup.md](docs/wsl-setup.md). The scripts also run from Git Bash on Windows, which is how Phases 0-3 were first verified; `make preflight` says which environment it detected.
+Supported setup: Windows with **WSL2 Ubuntu**, Docker Desktop (WSL2 backend, WSL integration enabled for the Ubuntu distro) and `minikube --driver=docker`; run every `make` target from the Ubuntu shell. Setup steps: [docs/wsl-setup.md](docs/wsl-setup.md). Phases 0-3 are verified there (Ubuntu 24.04, WSL 2.6.2, Docker 29.1.2): `make preflight`, `cluster-up`, `build deploy` and `cluster-check` all pass. The scripts also run from Git Bash on Windows; `make preflight` says which environment it detected.
 
 ## Architecture
 

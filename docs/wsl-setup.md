@@ -24,36 +24,21 @@ If a minikube profile named `dbrcl` was created from Windows earlier, delete it 
 
 ## 2. Ubuntu side (once)
 
+Install the pinned toolchain (Go 1.27.0, kubectl v1.37.0, Helm v4.3.0, minikube v1.39.0, k6 v2.2.0, make, Python 3, venv). Every download is checked against its published SHA-256; the script is idempotent:
+
 ```bash
-sudo apt-get update
-sudo apt-get install -y make git curl ca-certificates python3 python3-venv python3-pip
-
-cd /tmp
-# Go 1.27.0
-curl -fsSLO https://go.dev/dl/go1.27.0.linux-amd64.tar.gz
-sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.27.0.linux-amd64.tar.gz
-echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' >> ~/.bashrc
-
-# kubectl v1.37.0 (matches the cluster's Kubernetes version)
-curl -fsSLO https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl
-curl -fsSLO https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl.sha256
-echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
-sudo install -m 0755 kubectl /usr/local/bin/kubectl
-
-# Helm v4.3.0
-curl -fsSLO https://get.helm.sh/helm-v4.3.0-linux-amd64.tar.gz
-tar -xzf helm-v4.3.0-linux-amd64.tar.gz && sudo install -m 0755 linux-amd64/helm /usr/local/bin/helm
-
-# minikube v1.39.0
-curl -fsSLO https://github.com/kubernetes/minikube/releases/download/v1.39.0/minikube-linux-amd64
-sudo install -m 0755 minikube-linux-amd64 /usr/local/bin/minikube
-
-# k6 v2.2.0
-curl -fsSLO https://github.com/grafana/k6/releases/download/v2.2.0/k6-v2.2.0-linux-amd64.tar.gz
-tar -xzf k6-v2.2.0-linux-amd64.tar.gz && sudo install -m 0755 k6-v2.2.0-linux-amd64/k6 /usr/local/bin/k6
-
-source ~/.bashrc
+sudo bash scripts/wsl-install-tools.sh     # from a checkout, or straight from the Windows path:
+# wsl -d Ubuntu-24.04 -u root -- bash /mnt/d/<path-to-repo>/scripts/wsl-install-tools.sh
 ```
+
+Create your user once if the distro has none (PowerShell; asks for a password):
+
+```powershell
+wsl -d Ubuntu-24.04 -u root -- bash -c "adduser NAME && usermod -aG sudo NAME && printf '[user]\ndefault=NAME\n' >> /etc/wsl.conf"
+wsl --terminate Ubuntu-24.04
+```
+
+minikube's docker driver refuses to run as root, so run the testbed as that user.
 
 ## 3. Repository (inside Ubuntu)
 

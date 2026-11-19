@@ -105,7 +105,8 @@ if have minikube; then
       warn "BTF (Tetragon)" "/sys/kernel/btf/vmlinux missing in the minikube node, kernel $kver -> sink_fallback"
     fi
   else
-    warn "minikube status" "${host_state:-not running} (run make cluster-up, then re-run preflight for BTF)"
+    case "$host_state" in Stopped|Paused) ;; *) host_state="not running" ;; esac  # hide minikube's error text
+    warn "minikube status" "$host_state (run make cluster-up, then re-run preflight for BTF)"
     warn "BTF (Tetragon)" "unknown until the cluster is running"
   fi
 fi
