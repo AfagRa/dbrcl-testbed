@@ -11,7 +11,7 @@ MINIKUBE_DRIVER?= docker
 MINIKUBE_PROFILE?= dbrcl
 export MINIKUBE_CPUS MINIKUBE_MEMORY MINIKUBE_CNI MINIKUBE_DRIVER MINIKUBE_PROFILE PYTHON
 
-GO_MODULES := $(dir $(wildcard services/*/go.mod))
+GO_MODULES := $(dir $(wildcard services/go.mod))
 
 .PHONY: help preflight cluster-up build deploy undeploy test load-steady load-spike run analyze
 

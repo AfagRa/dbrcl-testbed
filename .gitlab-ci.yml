@@ -2,10 +2,10 @@ stages: [test]
 
 go:
   stage: test
-  image: golang:1.23
+  image: golang:1.26
   script:
     - |
-      for m in services/*/go.mod; do
+      for m in services/go.mod; do
         [ -f "$m" ] || continue
         d=$(dirname "$m"); echo "== $d"
         (cd "$d" && go vet ./... && go test ./...)
